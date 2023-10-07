@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web browser server</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+<style>
+   body {
+     margin: 0;
+     overflow: hidden;
+     font-family: sans-serif;
+     user-select: none;
+   }
+  .tab-container {
+    max-width: 100%;
+    max-height: 70px;
+    display: flex;
+    overflow-x: auto;
+    background-color: #f0f0f0;
+  }
+  .tab-button {
+    min-width: 7%;
+    height: 20px;
+    flex: 1;
+    padding: 10px 0px;
+    text-align: center;
+    cursor: pointer;
+  }
+  #addbutton{
+    margin-left: 25px;
+    padding: 10px 20px;
+    color:#f0f0f0;
+    background-color: #201f1f;
+  }
+  img {
+    user-select: none;
+    border: none;
+    size: 100%;
+  }
+  .close-button{
+    float: right;
+    color:rgb(39, 38, 38)
+  }
+  #linkinput{
+    float: left;
+    width: 100%;
+    padding:0.2% 0.1%
+  }
+  .bar2{
+    display: flex;
+    max-width: 100%;
+  }
+</style>
+</head>
+<body>
+<div class="tab-container" id="tabHeaders">
+    <div class="tab-button" id="addbutton" onclick="newTab()">+</div>  
+</div>
+<div id="content-menu">
+  <div class="bar2">
+  <button onclick="navbar('back')">←</button>
+  <button onclick="navbar('reload')">↺</button>
+  <button onclick="navbar('forward')">→</button>
+  <button onclick="navbar('savecookie')">✍</button>
+  <button onclick="navbar('setcookie')">📝</button>
+  <input id="linkinput">
+ </div>
+  <img id="screenshotImg" style="position: absolute; z-index: -1;">
+</div>
+
+<script>
+ function navbar(){}
+ function newTab(){}
+ function closeTab(){}
+ function openTab(){}
+ document.addEventListener("DOMContentLoaded", function() {
+   const socket = io({auth:{auth:prompt("password")}});
+   closeTab = function(pageid) {
+      document.getElementById("tab-"+pageid).remove()
+      socket.emit("server",{ close:pageid })
+     }
+    openTab = function(pageid){
+      currenttab = pageid
+    }
+    navbar = function(data){
+      var prt2 = ""
+      if(data == "setcookie") prt2 = prompt("JSON cookie data:")
+      socket.emit("server",{
+        tab:currenttab,
+        navbar:data,
+        prt2:prt2
+     })
+    }
+    newTab = function(){
+      socket.emit("server",{
+      newtab:true,
+      wH:{
+        w:window.innerWidth,
+        h:window.innerHeight-20
+      }
+     })
+     }
+    document.getElementById("linkinput").addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') document.getElementById("linkinput").blur()
+    if (event.key === 'Enter') socket.emit("server",{
+      openurl:document.getElementById("linkinput").value,
+      tab:currenttab
+     })
+  })
+
+   var currenttab = ""
+   var monitor = {
+        w:window.innerWidth,
+        h:window.innerHeight-20
+      }
+document.getElementById('screenshotImg').addEventListener("mousemove",function(event){
+    socket.emit("server",{ control:currenttab,mousemove:[event.offsetX,event.offsetY]})
+})
+document.getElementById('screenshotImg').addEventListener("wheel", function(event) {
+  socket.emit("server",{ control:currenttab,mousescrool:event.deltaY})
+});
+window.addEventListener("keydown", function(event) {
+  if(document.activeElement == document.getElementById("linkinput")) return;
+  event.preventDefault();
+  if(event.key.length > 2) event.key = event.key.replace(/^./, event.key[0].toUpperCase())
+  socket.emit("server",{ control:currenttab,keydown:event.key})
+})
+window.addEventListener("keyup", function(event) {
+  if(document.activeElement == document.getElementById("linkinput")) return;
+  event.preventDefault();
+  if(event.key.length > 2) event.key = event.key.replace(/^./, event.key[0].toUpperCase())
+  socket.emit("server",{ control:currenttab,keyup:event.key})
+})
+document.getElementById('screenshotImg').addEventListener("mouseup",function(event){
+  event.preventDefault();
+  var type = ""
+  if (event.button === 0) type = "left"
+  if (event.button === 1) type = "middle"
+  if (event.button === 2) type = "right"
+  socket.emit("server",{ control:currenttab,mouseup:type})
+})
+document.getElementById('screenshotImg').addEventListener("mousedown",function(event){
+  event.preventDefault();
+  document.getElementById("linkinput").blur()
+  document.getElementById('screenshotImg').focus()
+  var type = ""
+  if (event.button === 0) type = "left"
+  if (event.button === 1) type = "middle"
+  if (event.button === 2) type = "right"
+  socket.emit("server",{ control:currenttab,mousedown:type})
+})
+
+   setInterval(() => {
+     if(currenttab){
+      if(monitor.w != window.innerWidth || monitor.h != window.innerHeight-20) {
+      monitor = {
+        w:window.innerWidth,
+        h:window.innerHeight-20
+      }
+       socket.emit('server',{fxm:monitor});
+      } 
+       socket.emit('server',{stream:currenttab});
+     }
+   }, prompt("Stream refresh time:"));
+
+   socket.on('message', data => {  
+    if(data.data){
+      if(document.activeElement != document.getElementById("linkinput")){
+        document.getElementById("linkinput").value = data.url
+      }
+      console.log("Ping",Date.now()-data.time)
+      document.getElementById('screenshotImg').src = 'data:image/png;base64,' + data.data;
+   }
+   else if(data.newtab){
+    if(document.getElementById("tab-text-"+data.id) == null){
+    currenttab = data.id
+     document.getElementById("addbutton").remove()
+     document.getElementById("tabHeaders").innerHTML += 
+     `<div class="tab-button" id="tab-${data.id}" onclick="openTab('${data.id}')">
+        <span id="tab-text-${data.id}">${data.favicon+(data.title || "Yeni sekme")}</span> 
+        <span style="float:right;margin-left:25px">|</span> 
+        <span class="close-button" onclick="closeTab('${data.id}')">X</span> 
+     </div>`
+    document.getElementById("tabHeaders").innerHTML += `<div class="tab-button" id="addbutton" onclick="newTab()">+</div>`  
+   }else{
+    document.getElementById("tab-text-"+data.id).innerHTML = data.favicon+data.title || "Yeni sekme"
+   }
+  }
+  })
+})
+</script>
+</body>
+</html>
