@@ -17,6 +17,7 @@ async function run() {
   app.get("/", function (req, res) {
     res.sendFile(path.join(__dirname,"./website.html"));
   });
+  if (!fs.existsSync("./downloads")) fs.mkdirSync("./downloads");
 
   browser = await puppeteer.launch({
     args: settings.args || [
@@ -24,7 +25,7 @@ async function run() {
       "--disable-notifications",
       "--disable-dev-shm-usage",
     ],
-    headless: settings.headless == false ?  settings.headless : true,
+    headless: settings.headless == false ? false : "new",
     executablePath: settings.expath || "",
   });
 
@@ -44,7 +45,6 @@ async function run() {
     })
   },500)
 
-
   io.on("connection", (socket) => {
     if (socket.handshake.auth.auth != settings.password)
       return socket.disconnect();
@@ -54,6 +54,25 @@ async function run() {
         page = await browser.newPage();
         await page.setUserAgent(settings.useragent || 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.101 Safari/537.36')
         await page.setViewport({ width: data.wH.w, height:data.wH.h });
+        const client = await page.target().createCDPSession()
+        await client.send('Page.setDownloadBehavior', {
+            behavior: 'allow',
+            downloadPath: path.resolve(__dirname, 'downloads'),
+            eventsEnabled: true
+       });
+       var downloading = []
+       setInterval(()=>{
+           fs.readdirSync("downloads").forEach(file => {
+               if(file.endsWith(".crdownload") && !downloading.includes(file)){
+                   downloading.push(file.replace(".crdownload",""))
+               }
+               if(downloading.includes(file)){
+                   downloading = downloading.filter(x=>x!=file)
+                   io.emit("message",{downloaded:file})
+               }
+           });
+       },1000)
+    
         if (fs.existsSync("cookies.json")) {
           for (const cookie of JSON.parse(fs.readFileSync("cookies.json"))) {
           try{  await page.setCookie(cookie);}catch{}
@@ -106,10 +125,22 @@ async function run() {
             fs.writeFileSync('cookies.json', JSON.stringify(cookies, null, 2));}catch{}
           }
           if(data.navbar == "setcookie"){ fs.writeFileSync('cookies.json', data.prt2);}
+          if(data.navbar == "upload"){
+            try{
+              const filechooser = await tempdata[0].page.waitForFileChooser()
+              await filechooser.accept([path.join(__dirname,"./downloads/"+data.prt2)]);
+            }catch{}
+          }
+          if(data.navbar == "cleardownload"){
+            fs.readdirSync("./downloads").map((x)=>{
+              fs.unlinkSync("./downloads/"+x)
+            })
+          }
         } 
       }
       if(data.openurl){
         var tempdata = pagedata.filter(z=>z.id == data.tab)
+        if(!data.openurl.includes("http") && !data.openurl.includes("https")) data.openurl = "https://www.google.com/search?q="+data.openurl
         if(tempdata.length){ try{ await tempdata[0].page.goto(data.openurl)}catch{}}
       }
     });
