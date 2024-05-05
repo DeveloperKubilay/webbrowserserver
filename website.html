@@ -64,6 +64,8 @@
   <button onclick="navbar('forward')">→</button>
   <button onclick="navbar('savecookie')">✍</button>
   <button onclick="navbar('setcookie')">📝</button>
+  <button onclick="navbar('cleardownload')">🗑️</button>
+  <button onclick="navbar('upload')">📤</button>
   <input id="linkinput">
  </div>
   <img id="screenshotImg" style="position: absolute; z-index: -1;">
@@ -86,6 +88,16 @@
     navbar = function(data){
       var prt2 = ""
       if(data == "setcookie") prt2 = prompt("JSON cookie data:")
+      socket.emit("server",{
+        tab:currenttab,
+        navbar:data,
+        prt2:prt2
+     })
+    }
+    navbar = function(data){
+      var prt2 = ""
+      if(data == "setcookie") prt2 = prompt("JSON cookie data:")
+      if(data == "upload") prt2 = prompt("File name:")
       socket.emit("server",{
         tab:currenttab,
         navbar:data,
@@ -186,6 +198,8 @@ document.getElementById('screenshotImg').addEventListener("mousedown",function(e
    }else{
     document.getElementById("tab-text-"+data.id).innerHTML = data.favicon+data.title || "Yeni sekme"
    }
+  }else if(data.downloaded){
+    alert("Downloaded: "+data.downloaded)
   }
   })
 })
