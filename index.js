@@ -23,7 +23,6 @@ async function run() {
     args: settings.args || [
       "--no-sandbox",
       "--disable-notifications",
-      "--disable-dev-shm-usage",
     ],
     headless: settings.headless == false ? false : "new",
     executablePath: settings.expath || "",
